@@ -8,6 +8,7 @@ sys.path.append(".")
 # monkey patch to fix issues in msaf
 import scipy
 import numpy as np
+from gradio.processing_utils import PUBLIC_HOSTNAME_WHITELIST
 
 scipy.inf = np.inf
 
@@ -43,6 +44,8 @@ muq_model = None
 musicfm_model = None
 msa_model = None
 device = None
+
+PUBLIC_HOSTNAME_WHITELIST.append("127.0.0.1")
 
 
 def load_checkpoint(checkpoint_path, device=None):
@@ -393,7 +396,28 @@ def rule_post_processing(msa_list):
 
 
 def process_and_analyze(audio_file):
-    """Main processing function"""
+    """analyze audio structure for duration of verse, chorus, etc. return segments, json, msa text, and visualization plot.
+
+    Args:
+        audio_file: path to audio file.
+
+    Returns:
+        segments_table: list of segments with start, end, label.
+        json_format: JSON string of segments.
+        msa_format: MSA format of audio structure. each row with "start_time(s) tag"
+        fig: matplotlib figure of visualization.
+    Example of structure of msa_output:
+        0.00 intro
+        14.52 intro
+        32.52 verse
+        45.96 verse
+        59.28 verse
+        72.48 verse
+        85.92 verse
+        98.40 chorus
+        127.45 verse
+
+    """
 
     def format_time(t: float) -> str:
         minutes = int(t // 60)
@@ -424,9 +448,10 @@ def process_and_analyze(audio_file):
         ]
 
         # Create visualization
-        fig = create_visualization(logits, msa_output)
+        # fig = create_visualization(logits, msa_output)
 
-        return table_data, json_format, msa_format, fig
+        # remove fig to save tokens for agent
+        return table_data, json_format, msa_format  # , fig
 
     except Exception as e:
         import traceback
@@ -459,21 +484,26 @@ with gr.Blocks(
     """,
 ) as demo:
     # Top Logo
-    gr.HTML("""
+    gr.HTML(
+        """
         <div style="display: flex; justify-content: center; align-items: center;">
             <img src="https://raw.githubusercontent.com/ASLP-lab/SongFormer/refs/heads/main/figs/logo.png" style="max-width: 300px; height: auto;" />
         </div>
-    """)
+    """
+    )
 
     # Model title
-    gr.HTML("""
+    gr.HTML(
+        """
         <div class="model-title">
             SongFormer: Scaling Music Structure Analysis with Heterogeneous Supervision
         </div>
-    """)
+    """
+    )
 
     # Links
-    gr.HTML("""
+    gr.HTML(
+        """
         <div class="links-container">
             <img src="https://img.shields.io/badge/Python-3.10-brightgreen" alt="Python">
             <img src="https://img.shields.io/badge/License-CC%20BY%204.0-lightblue" alt="License">
@@ -502,7 +532,8 @@ with gr.Blocks(
             <img src="https://img.shields.io/badge/🏫-ASLP-grey?labelColor=lightgrey" alt="ASLP">
             </a>
         </div>
-    """)
+    """
+    )
 
     # Main input area
     with gr.Row():
@@ -546,7 +577,8 @@ with gr.Blocks(
                         lines=15,
                         max_lines=20,
                         interactive=False,
-                        show_copy_button=True,
+                        # show_copy_button=True,
+                        buttons=["copy"],
                     )
             with gr.Row():
                 with gr.Accordion("📋 MSA Text Output", open=False):
@@ -555,24 +587,28 @@ with gr.Blocks(
                         lines=15,
                         max_lines=20,
                         interactive=False,
-                        show_copy_button=True,
+                        # show_copy_button=False,
+                        buttons=["copy"],
                     )
 
     # Visualization plot
-    with gr.Row():
-        plot_output = gr.Plot(label="Activation Curves Visualization")
+    # with gr.Row():
+    #     plot_output = gr.Plot(label="Activation Curves Visualization")
 
-    gr.HTML("""
+    gr.HTML(
+        """
         <div style="display: flex; justify-content: center; align-items: center;">
             <img src="https://raw.githubusercontent.com/ASLP-lab/SongFormer/refs/heads/main/figs/aslp.png" style="max-width: 300px; height: auto;" />
         </div>
-    """)
+    """
+    )
 
     # Set event handlers
     analyze_btn.click(
         fn=process_and_analyze,
         inputs=[audio_input],
-        outputs=[segments_table, json_output, msa_output, plot_output],
+        # outputs=[segments_table, json_output, msa_output, plot_output],
+        outputs=[segments_table, json_output, msa_output],
     )
 
 if __name__ == "__main__":
@@ -588,4 +624,4 @@ if __name__ == "__main__":
     print("Models loaded successfully!")
 
     # Launch interface
-    demo.launch(server_name="127.0.0.1", server_port=7891, debug=True)
+    demo.launch(mcp_server=True, server_port=7868)
